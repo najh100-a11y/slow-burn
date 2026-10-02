@@ -109,13 +109,13 @@
   /* ---------- 나눔판 서버 ---------- */
   function rpc(fn, args) {
     var base = String(CFG.supabaseUrl).replace(/\/$/, '');
+    var key = String(CFG.supabaseAnonKey);
+    var headers = { 'apikey': key, 'Content-Type': 'application/json' };
+    /* 예전 anon key(eyJ…)일 때만 Authorization에도 넣는다. 새 publishable key(sb_publishable_…)는 apikey 헤더에만. */
+    if (/^eyJ/.test(key)) headers['Authorization'] = 'Bearer ' + key;
     return fetch(base + '/rest/v1/rpc/' + fn, {
       method: 'POST',
-      headers: {
-        'apikey': CFG.supabaseAnonKey,
-        'Authorization': 'Bearer ' + CFG.supabaseAnonKey,
-        'Content-Type': 'application/json'
-      },
+      headers: headers,
       body: JSON.stringify(args)
     }).then(function (r) {
       if (!r.ok) throw new Error(fn + ' ' + r.status);
@@ -508,7 +508,7 @@
         var max = Math.max.apply(null, sec.stats.map(function (x) { return x.value; }));
         h += '<section class="card tight"><div style="display:flex;flex-direction:column;gap:4px"><div class="eyebrow">' + esc(sec.title) + '</div>' + (sec.lead ? '<div style="font-size:1rem;font-weight:600;line-height:1.5">' + esc(sec.lead) + '</div>' : '') + '</div>';
         h += '<div style="display:flex;flex-direction:column;gap:10px">' + sec.stats.map(function (x) {
-          return '<div class="stat"><div class="l"><span>' + esc(x.label) + '</span><b>' + x.value + esc(x.unit || '') + '</b></div><div class="track"><div class="fill" style="width:' + Math.max(2, Math.round(x.value / max * 100)) + '%"></div></div></div>';
+          return '<div class="stat"><div class="l"><span>' + esc(x.label) + '</span><b>' + esc(x.display || (x.value + (x.unit || ''))) + '</b></div><div class="track"><div class="fill" style="width:' + Math.max(2, Math.round(x.value / max * 100)) + '%"></div></div></div>';
         }).join('') + '</div>';
         if (sec.p) h += '<div class="prose"><p>' + esc(sec.p) + '</p></div>';
         if (sec.source) h += '<div class="small">' + esc(sec.source) + '</div>';

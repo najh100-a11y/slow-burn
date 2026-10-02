@@ -11,13 +11,18 @@
 
 `config.js`의 `supabaseAnonKey`가 비어 있으면 나눔판 없이 읽기, 내 문장, 이야기, 더 깊이, 내 노트가 작동한다. 이 상태에서 인도자 미리보기를 쓰려면 `config.js`의 `leaderPin`에 숫자를 넣는다.
 
-## 2. 나눔판 켜기
+## 2. 나눔판 켜기 (새 Supabase 계정)
 
-1. Supabase 대시보드의 SQL Editor에 `supabase/setup.sql`을 통째로 붙여 넣는다. 맨 아래 INSERT 문의 모임 코드와 인도자 PIN을 바꾼 뒤 실행한다. 표 이름이 모두 `bookclub_`로 시작하므로 같은 프로젝트의 다른 앱과 섞이지 않는다.
-2. Project Settings > API에서 anon public key를 복사해 `config.js`의 `supabaseAnonKey`에 넣는다. `supabaseUrl`에는 회의록·가족정원 앱과 같은 프로젝트 주소를 미리 넣어 두었다. 다른 프로젝트를 쓰면 그 주소로 바꾼다.
-3. `config.js`를 다시 올린다. 이제 앱을 처음 여는 사람에게 모임 코드와 나눔판에 보일 이름(선택)을 묻는다.
+1. supabase.com에서 새 계정으로 가입하고, 조직(Organization)을 Free 플랜으로 만든다.
+2. New project를 누르고 이름(예: bookclub-1do), 데이터베이스 비밀번호(Generate로 만든 뒤 따로 보관), 지역 Northeast Asia (Seoul)를 고른 뒤 만든다. 준비되는 데 몇 분 걸린다.
+3. SQL Editor에서 `supabase/setup.sql`을 통째로 붙여 넣는다. 맨 아래 INSERT 문의 모임 코드와 인도자 PIN을 바꾼 뒤 실행한다.
+4. 새 쿼리에서 `select public.bookclub_check_code('정한코드');`를 실행해 `true`가 나오는지 확인한다.
+5. 프로젝트 주소(`https://<프로젝트ID>.supabase.co`)와 Project Settings > API Keys의 Publishable key(`sb_publishable_`로 시작)를 복사해 `config.js`의 `supabaseUrl`, `supabaseAnonKey`에 넣는다. Secret key(`sb_secret_`)는 절대 넣지 않는다.
+6. `config.js`를 다시 올린다. 이제 앱을 처음 여는 사람에게 모임 코드와 나눔판에 보일 이름(선택)을 묻는다.
 
-anon key는 원래 공개되는 값이다. 나눔판의 보안은 SQL 함수가 매번 모임 코드를 확인하는 데서 나온다. 코드를 바꾸면 기존 사용자도 코드를 다시 넣어야 한다.
+Publishable key는 원래 공개되는 값이다. 나눔판의 보안은 SQL 함수가 매번 모임 코드를 확인하는 데서 나온다. 코드를 바꾸면 기존 사용자도 코드를 다시 넣어야 한다.
+
+무료 플랜 프로젝트는 일주일 가까이 사용이 거의 없으면 일시 정지된다. 정지 전에 경고 메일이 오며, 대시보드에 한 번 들어가면 막을 수 있다. 정지되어도 자료는 남고 대시보드에서 다시 켤 수 있다.
 
 ## 3. 매주 자료 올리기
 

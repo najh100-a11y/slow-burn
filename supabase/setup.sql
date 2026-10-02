@@ -133,6 +133,9 @@ grant execute on function
   public.bookclub_hide(text, text, uuid)
 to anon;
 
+-- Data API가 새 함수들을 바로 알아보도록 새로 고침
+notify pgrst, 'reload schema';
+
 -- 5. 모임 코드와 인도자 PIN (바꿔서 실행하세요. 나중에 바꿀 때도 이 문장만 다시 실행하면 됩니다)
 insert into public.bookclub_settings (id, join_code, leader_pin)
 values (1, '여기에모임코드', '여기에인도자PIN')

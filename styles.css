@@ -250,7 +250,7 @@ input.page { width: 5.5em; flex-shrink: 0; min-height: 44px; }
 /* 더 깊이 */
 .stat { display: flex; flex-direction: column; gap: 4px; }
 .stat .l { display: flex; justify-content: space-between; gap: 8px; font-size: 0.8125rem; color: var(--ink-2); }
-.stat .l b { color: var(--ink); }
+.stat .l b { color: var(--ink); white-space: nowrap; }
 .stat .track { height: 8px; border-radius: 4px; background: #EEF1EF; overflow: hidden; }
 .stat .fill { height: 8px; border-radius: 4px; background: var(--faint); }
 .stat:last-child .fill { background: var(--ember); }
