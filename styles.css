@@ -174,6 +174,7 @@ a { color: var(--forest); }
 }
 .reading .para.sel { background: var(--forest-tint); }
 .grab { align-self: flex-start; margin-top: -6px; }
+.pill-btn.ember { color: var(--ember-ink); border-color: var(--ember); }
 .note-small { font-size: 0.8125rem; color: var(--muted); line-height: 1.6; }
 
 /* 잠김 */

@@ -387,14 +387,16 @@
     if (!readOpen(s)) return lockedCard(fmt(readOpenAt(s)) + '에 열려요', '그 전에 책을 먼저 읽어 두셔도 좋아요. 열리면 이번 주 화면에서 바로 보실 수 있어요.');
     var rd = s.read, h = '';
     if (!readReallyOpen(s)) h += previewBanner(readOpenAt(s));
-    h += '<article class="reading"><div class="small">오늘 읽을 내용, 약 ' + (rd.minutes || 10) + '분. 문단을 누르면 내 문장으로 담을 수 있어요.</div>';
+    h += '<article class="reading"><div class="small">오늘 읽을 내용, 약 ' + (rd.minutes || 10) + '분. 문단을 누르면 공감이나 의심으로 담을 수 있어요.</div>';
     h += '<div style="display:flex;flex-direction:column;gap:6px"><h1>' + esc(rd.title) + '</h1>' + (rd.subtitle ? '<div class="sub" style="font-size:.9375rem">' + esc(rd.subtitle) + '</div>' : '') + '</div>';
     var pi = 0;
     rd.blocks.forEach(function (b) {
       if (b.h) { h += '<h2>' + esc(b.h) + '</h2>'; return; }
       var i = pi++;
       h += '<button class="para' + (ui.sel === i ? ' sel' : '') + '" data-act="selp" data-i="' + i + '" aria-pressed="' + (ui.sel === i) + '">' + esc(b.p) + '</button>';
-      if (ui.sel === i) h += '<button class="pill-btn grab" data-act="grab" data-i="' + i + '">' + I.plus + ' 이 문단을 내 문장으로 담기</button>';
+      if (ui.sel === i) h += '<div class="row grab" style="gap:8px;flex-wrap:wrap">' +
+        '<button class="pill-btn" data-act="grab" data-kind="moved" data-i="' + i + '">' + I.plus + ' 공감·놀람으로 담기</button>' +
+        '<button class="pill-btn ember" data-act="grab" data-kind="doubt" data-i="' + i + '">' + I.plus + ' 의심으로 담기</button></div>';
     });
     if (rd.note) h += '<p class="note-small">' + esc(rd.note) + '</p>';
     var c = S.checks[s.id] || {};
@@ -561,6 +563,11 @@
     else html = vHome();
     $app.innerHTML = html;
     document.body.style.overflow = ui.big ? 'hidden' : '';
+    if (ui.focusId) {
+      var el = document.getElementById(ui.focusId);
+      ui.focusId = null;
+      if (el) el.scrollIntoView({ block: 'center' });
+    }
   }
 
   /* ---------- 동작 ---------- */
@@ -583,7 +590,9 @@
     grab: function (t) {
       var r = parse(), s = SESS[r.id]; if (!s) return;
       var text = paragraphs(s)[Number(t.getAttribute('data-i'))] || '';
-      var k = s.id + ':moved';
+      var kind = t.getAttribute('data-kind') === 'doubt' ? 'doubt' : 'moved';
+      var k = s.id + ':' + kind;
+      ui.focusId = 'ta-' + kind;
       S.drafts[k] = S.drafts[k] ? S.drafts[k] + '\n' + text : text;
       if (!S.drafts[k + ':page']) S.drafts[k + ':page'] = '요약';
       save();
