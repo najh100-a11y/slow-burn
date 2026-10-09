@@ -4,6 +4,7 @@
 (function () {
   'use strict';
 
+  var APP_VERSION = '2026.10.02-4';
   var CFG = window.BOOKCLUB_CONFIG || {};
   var SHARING = !!(CFG.supabaseUrl && CFG.supabaseAnonKey);
   var KEY = 'bookclub-1do-v1';
@@ -337,6 +338,7 @@
     h += '</div></section>';
 
     h += '<section class="card"><div class="set-row"><div class="label-strong">내 기록</div><p class="sub">내 노트는 이 휴대폰에만 저장돼요. 휴대폰을 바꾸기 전에 내보내 두세요.</p><button class="btn small ghost" data-act="export">내 노트 내보내기</button><button class="linkish danger" data-act="resetall" style="align-self:flex-start">이 휴대폰의 기록 모두 지우기</button></div></section>';
+    h += '<p class="small" style="margin:0;text-align:center">앱 버전 ' + APP_VERSION + '</p>';
     h += '</main></div></div>';
     return h;
   }
@@ -755,7 +757,13 @@
 
   /* ---------- 시작 ---------- */
   if ('serviceWorker' in navigator) {
-    window.addEventListener('load', function () { navigator.serviceWorker.register('sw.js').catch(function () {}); });
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(function (reg) { reg.update(); }).catch(function () {});
+    });
+    var reloaded = false;
+    navigator.serviceWorker.addEventListener('controllerchange', function () {
+      if (reloaded) return; reloaded = true; location.reload();
+    });
   }
   $app.innerHTML = '<div class="loading">불러오는 중…</div>';
   getJSON('content/index.json').then(function (d) { INDEX = d; route(); }).catch(function () {
