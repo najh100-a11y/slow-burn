@@ -4,7 +4,7 @@
 (function () {
   'use strict';
 
-  var APP_VERSION = '2026.10.02-5';
+  var APP_VERSION = '2026.10.02-6';
   var CFG = window.BOOKCLUB_CONFIG || {};
   var SHARING = !!(CFG.supabaseUrl && CFG.supabaseAnonKey);
   var KEY = 'bookclub-1do-v1';
@@ -109,6 +109,36 @@
     for (var i = 0; i < list.length; i++) { if (pd(list[i].date) >= t) return i; }
     return list.length - 1;
   }
+
+  /* ---------- 열리는 날 (인도자가 앱에서 조정, Supabase에 저장) ---------- */
+  var SCHED = {};
+  function iso(d) { return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
+  function rememberBase() {
+    INDEX.sessions.forEach(function (m) {
+      m._base = { readOpens: m.readOpens, boardOpens: m.boardOpens, allOpens: m.allOpens };
+    });
+  }
+  function applySchedule() {
+    INDEX.sessions.forEach(function (m) {
+      var o = SCHED[m.id] || {};
+      m.readOpens = o.read_opens || m._base.readOpens;
+      m.boardOpens = o.board_opens || m._base.boardOpens;
+      m.allOpens = o.all_opens || m._base.allOpens;
+      if (SESS[m.id]) { SESS[m.id].readOpens = m.readOpens; SESS[m.id].boardOpens = m.boardOpens; SESS[m.id].allOpens = m.allOpens; }
+    });
+  }
+  function loadSchedule() {
+    if (!SHARING) return Promise.resolve();
+    var job = rpc('bookclub_get_schedule', {}).then(function (rows) {
+      SCHED = {};
+      (rows || []).forEach(function (r) { SCHED[r.session_id] = r; });
+      applySchedule();
+    }).catch(function () { /* 일정 표가 없거나 연결이 안 되면 기본 일정을 따른다 */ });
+    var timeout = new Promise(function (res) { setTimeout(res, 3000); });
+    return Promise.race([job, timeout]);
+  }
+  function defaultReadAt(m) { return m._base.readOpens ? pd(m._base.readOpens) : addDays(pd(m.date), -4); }
+  function defaultAllAt(m) { return m._base.allOpens ? pd(m._base.allOpens) : pd(m.date); }
 
   /* ---------- 나눔판 서버 ---------- */
   function rpc(fn, args) {
@@ -336,7 +366,7 @@
     h += '</div></section>';
 
     h += '<section class="card"><div class="set-row"><div class="label-strong">인도자 모드</div>';
-    if (isLeader()) h += '<p class="sub">켜져 있어요. 아직 열리지 않은 자료를 미리 볼 수 있고, 나눔판의 글을 숨길 수 있어요.</p><button class="btn small ghost" data-act="leaderoff">인도자 모드 끄기</button>';
+    if (isLeader()) h += '<p class="sub">켜져 있어요. 아직 열리지 않은 자료를 미리 볼 수 있고, 나눔판의 글을 숨길 수 있어요.</p>' + (SHARING ? '<a class="btn small" href="#/schedule">열리는 날 조정하기</a>' : '') + '<button class="btn small ghost" data-act="leaderoff">인도자 모드 끄기</button>';
     else h += '<p class="sub">모임을 인도하는 분만 쓰는 기능이에요.</p><div class="field"><label for="pin">인도자 PIN</label><input id="pin" type="password" inputmode="numeric" autocomplete="off"></div><button class="btn small ghost" data-act="leaderon">인도자 모드 켜기</button>';
     h += '</div></section>';
 
@@ -344,6 +374,30 @@
     h += '<p class="small" style="margin:0;text-align:center">앱 버전 ' + APP_VERSION + '</p>';
     h += '</main></div></div>';
     return h;
+  }
+
+  /* ---------- 열리는 날 조정 (인도자) ---------- */
+  function vSchedule() {
+    var h = '<div class="screen"><div class="wrap"><div class="sbar"><div class="row"><a class="icon-btn plain" href="#/settings" aria-label="설정으로 돌아가기" style="color:var(--ink)">' + I.back + '</a><div class="mid"><span class="b">열리는 날 조정</span></div><span style="width:44px"></span></div></div><main class="smain">';
+    if (!isLeader() || !canShare()) return h + '<div class="empty">인도자 모드에서만 쓸 수 있어요.</div></main></div></div>';
+    h += '<p class="sub" style="color:var(--ink-2)">바꾼 날짜는 저장하는 순간 모든 사람의 앱에 반영돼요. 비워 두면 기본 일정(모임 4일 전 수요일, 모임 날)을 따릅니다.</p>';
+    var t = iso(today0()), ci = currentIdx();
+    INDEX.sessions.forEach(function (m, i) {
+      if (i < ci) return; /* 지난 모임은 감춤 */
+      var o = SCHED[m.id] || {};
+      h += '<section class="card tight"><div style="display:flex;flex-direction:column;gap:2px"><div class="label-strong">' + esc(m.label) + ' ' + esc(m.title) + '</div><div class="small">모임 ' + esc(fmt(pd(m.date))) + '</div></div>';
+      h += schedField(m.id, 'r', '요약과 나눔판', o.read_opens || '', defaultReadAt(m), t);
+      h += schedField(m.id, 'a', '질문과 더 깊이', o.all_opens || '', defaultAllAt(m), t);
+      h += '<div class="row"><button class="btn small ghost" data-act="schedreset" data-sid="' + m.id + '"' + (SCHED[m.id] ? '' : ' disabled') + '>기본 일정으로</button><button class="btn small" data-act="schedsave" data-sid="' + m.id + '">저장</button></div></section>';
+    });
+    h += '</main></div></div>';
+    return h;
+  }
+  function schedField(sid, k, label, val, def, todayIso) {
+    var id = 'sc-' + k + '-' + sid;
+    return '<div class="field"><label for="' + id + '">' + esc(label) + ' <span>기본 ' + esc(fmt(def)) + '</span></label>' +
+      '<div class="row"><input type="date" id="' + id + '" value="' + esc(val) + '" style="flex:1;min-height:48px;padding:0 12px;border-radius:12px;border:1px solid var(--line-2);background:var(--surface);font-size:1rem">' +
+      '<button class="pill-btn" data-act="schedtoday" data-target="' + id + '" data-v="' + todayIso + '">오늘 열기</button></div></div>';
   }
 
   /* ---------- 처음 시작 ---------- */
@@ -565,6 +619,7 @@
     else if (r.name === 'sessions') html = vSessions();
     else if (r.name === 'notes') html = vNotes();
     else if (r.name === 'settings') html = vSettings();
+    else if (r.name === 'schedule') html = vSchedule();
     else if (r.name === 's') html = vSession(r);
     else html = vHome();
     $app.innerHTML = html;
@@ -692,6 +747,27 @@
       }
       if (CFG.leaderPin && String(CFG.leaderPin) === pin) ok(); else toast('PIN이 맞지 않아요.');
     },
+    schedtoday: function (t) { var el = document.getElementById(t.getAttribute('data-target')); if (el) el.value = t.getAttribute('data-v'); },
+    schedsave: function (t) {
+      var sid = t.getAttribute('data-sid');
+      var r = (document.getElementById('sc-r-' + sid) || {}).value || null;
+      var al = (document.getElementById('sc-a-' + sid) || {}).value || null;
+      if (r && al && r > al) { toast('요약이 질문보다 늦게 열리게 되어 있어요. 날짜를 확인해 주세요.'); return; }
+      t.disabled = true;
+      return rpc('bookclub_set_schedule', { p_code: S.code, p_pin: S.leaderPin, p_session: sid, p_read: r, p_board: null, p_all: al }).then(function (ok) {
+        if (!ok) { toast('인도자 PIN을 확인해 주세요.'); render(); return; }
+        if (r || al) SCHED[sid] = { session_id: sid, read_opens: r, board_opens: null, all_opens: al }; else delete SCHED[sid];
+        applySchedule(); toast('저장했어요. 모든 사람의 앱에 반영돼요.'); render();
+      }).catch(function () { toast('저장하지 못했어요. 인터넷 연결을 확인해 주세요.'); render(); });
+    },
+    schedreset: function (t) {
+      var sid = t.getAttribute('data-sid');
+      if (!window.confirm('이 모임의 열리는 날을 기본 일정으로 되돌릴까요?')) return;
+      return rpc('bookclub_set_schedule', { p_code: S.code, p_pin: S.leaderPin, p_session: sid, p_read: null, p_board: null, p_all: null }).then(function (ok) {
+        if (!ok) { toast('인도자 PIN을 확인해 주세요.'); return; }
+        delete SCHED[sid]; applySchedule(); toast('기본 일정으로 되돌렸어요.'); render();
+      }).catch(function () { toast('되돌리지 못했어요. 인터넷 연결을 확인해 주세요.'); });
+    },
     leaderoff: function () { S.leaderPin = ''; save(); toast('인도자 모드를 껐어요'); render(); },
     export: function () {
       var text = exportText();
@@ -770,7 +846,7 @@
     });
   }
   $app.innerHTML = '<div class="loading">불러오는 중…</div>';
-  getJSON('content/index.json').then(function (d) { INDEX = d; route(); }).catch(function () {
+  getJSON('content/index.json').then(function (d) { INDEX = d; rememberBase(); return loadSchedule(); }).then(function () { route(); }).catch(function () {
     $app.innerHTML = '<div class="loading">자료를 불러오지 못했어요.<br>인터넷 연결을 확인한 뒤 다시 열어 주세요.</div>';
   });
 })();

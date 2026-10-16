@@ -42,6 +42,12 @@ Publishable key는 원래 공개되는 값이다. 나눔판의 보안은 SQL 함
 - 인도자 모드는 설정 > 인도자 모드에서 PIN으로 켠다. 아직 열리지 않은 자료를 미리 볼 수 있고, 나눔판의 글을 숨길 수 있다.
 - 숨긴 글 되살리기와 나눔판 비우기는 `setup.sql` 맨 아래 주석에 적어 두었다.
 
+## 5. 열리는 날 바꾸기 (인도자)
+
+설정 > 인도자 모드를 켜면 "열리는 날 조정하기"가 나온다. 이번 모임부터 남은 모임마다 "요약과 나눔판", "질문과 더 깊이"가 열리는 날을 고를 수 있고, "오늘 열기"를 누르면 오늘 날짜가 들어간다. 저장하는 순간 모든 사람의 앱에 반영된다(앱을 다시 열 때 적용). "기본 일정으로"를 누르면 모임 4일 전 수요일, 모임 날로 돌아간다.
+
+이 기능을 쓰려면 Supabase SQL Editor에서 `supabase/schedule.sql`을 한 번 실행해 둔다. 고칠 값 없이 그대로 실행하면 된다. 처음부터 새로 설정하는 경우에는 `setup.sql`에 이미 들어 있다.
+
 ## 파일
 
 - `index.html`, `styles.css`, `app.js`: 앱 본체
@@ -50,4 +56,5 @@ Publishable key는 원래 공개되는 값이다. 나눔판의 보안은 SQL 함
 - `content/s0.json`, `content/s1.json`: 오리엔테이션과 1회차 자료
 - `content/_template.json`: 새 회차 자료 틀
 - `manifest.webmanifest`, `sw.js`, `icons/`: 홈 화면 설치와 오프라인용
-- `supabase/setup.sql`: 나눔판 표와 함수
+- `supabase/setup.sql`: 나눔판 표와 함수(처음 설정용)
+- `supabase/schedule.sql`: 열리는 날 조정 기능(이미 setup.sql을 실행한 경우 추가로 한 번 실행)
