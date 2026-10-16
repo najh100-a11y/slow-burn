@@ -4,7 +4,7 @@
 (function () {
   'use strict';
 
-  var APP_VERSION = '2026.10.02-4';
+  var APP_VERSION = '2026.10.02-5';
   var CFG = window.BOOKCLUB_CONFIG || {};
   var SHARING = !!(CFG.supabaseUrl && CFG.supabaseAnonKey);
   var KEY = 'bookclub-1do-v1';
@@ -57,6 +57,9 @@
   function readReallyOpen(s) { return new Date() >= readOpenAt(s); }
   function allReallyOpen(s) { return new Date() >= allOpenAt(s); }
   function readOpen(s) { return isLeader() || readReallyOpen(s); }
+  function boardOpenAt(s) { return s.boardOpens ? pd(s.boardOpens) : readOpenAt(s); }
+  function boardReallyOpen(s) { return new Date() >= boardOpenAt(s); }
+  function boardOpen(s) { return isLeader() || boardReallyOpen(s); }
   function allOpen(s) { return isLeader() || allReallyOpen(s); }
   function canShare() { return SHARING && S.joined && !!S.code; }
   function pageLabel(p) { if (!p) return ''; return /^\d+$/.test(p) ? p + '쪽' : p; }
@@ -137,7 +140,7 @@
   function refreshBoard(id, rerender) {
     var s = SESS[id];
     if (!canShare() || !s) return Promise.resolve();
-    var p = allOpen(s)
+    var p = boardOpen(s)
       ? rpc('bookclub_list', { p_code: S.code, p_session: id, p_device: S.deviceId }).then(function (rows) {
           ui.board[id] = { rows: rows || [], count: (rows || []).length, err: false };
         })
@@ -458,10 +461,11 @@
     var b = ui.board[s.id];
     if (!b) return h + '<div class="empty">불러오는 중…</div>';
     if (b.err && !b.rows && typeof b.count !== 'number') return h + '<div class="empty">나눔판을 불러오지 못했어요. 인터넷 연결을 확인해 주세요.</div><button class="btn ghost" data-act="retryboard" data-sid="' + s.id + '">다시 불러오기</button>';
-    if (!allOpen(s)) {
-      return h + '<div class="locked"><div class="t">지금까지 ' + (b.count || 0) + '개의 문장이 올라왔어요</div><div class="s">서로의 문장은 ' + esc(fmt(allOpenAt(s))) + ' 모임 때 함께 봅니다. 그 전에 내 문장을 올려 두셔도 좋아요.</div><a class="btn small ghost" href="#/s/' + s.id + '/share" style="margin-top:6px">내 문장 적기</a></div>';
+    if (!boardOpen(s)) {
+      if (!readOpen(s)) return h + lockedCard(fmt(boardOpenAt(s)) + '에 열려요', '요약이 열리는 날부터 서로의 문장을 함께 보고 나도요를 누를 수 있어요.');
+      return h + '<div class="locked"><div class="t">지금까지 ' + (b.count || 0) + '개의 문장이 올라왔어요</div><div class="s">서로의 문장은 ' + esc(fmt(boardOpenAt(s))) + '부터 함께 봅니다. 그 전에 내 문장을 올려 두셔도 좋아요.</div><a class="btn small ghost" href="#/s/' + s.id + '/share" style="margin-top:6px">내 문장 적기</a></div>';
     }
-    if (!allReallyOpen(s)) h += previewBanner(allOpenAt(s));
+    if (!boardReallyOpen(s)) h += previewBanner(boardOpenAt(s));
     var rows = b.rows || [], f = ui.bfilter;
     var nm = rows.filter(function (x) { return x.kind === 'moved'; }).length, nd = rows.length - nm;
     h += '<div class="row between"><div class="chips" role="group" aria-label="나눔판 거르기">' +
@@ -469,7 +473,7 @@
       '<button class="chip" data-act="bfilter" data-v="moved" aria-pressed="' + (f === 'moved') + '">공감·놀람 ' + nm + '</button>' +
       '<button class="chip" data-act="bfilter" data-v="doubt" aria-pressed="' + (f === 'doubt') + '">의심 ' + nd + '</button></div>' +
       '<button class="icon-btn" data-act="bigboard" data-sid="' + s.id + '" aria-label="나눔판 크게 보기">' + I.expand + '</button></div>';
-    h += '<div class="live"><span class="d"></span>나도요가 많은 순서예요. 새 문장은 저절로 나타나요.</div>';
+    h += '<div class="live"><span class="d"></span>나도요가 많은 순서예요. 마음에 닿는 문장에 나도요를 눌러 주세요.</div>';
     var shown = rows.filter(function (x) { return f === 'all' || x.kind === f; });
     if (!shown.length) h += '<div class="empty">아직 올라온 문장이 없어요. 첫 문장을 올려 보세요.</div>';
     shown.forEach(function (x) {
