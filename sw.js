@@ -1,6 +1,6 @@
 /* 오프라인에서도 열리도록 앱 파일을 보관합니다.
    늘 인터넷의 최신 파일을 먼저 받고(브라우저 임시 저장도 건너뜀), 연결이 없을 때만 보관본을 씁니다. */
-var CACHE = 'bookclub-1do-2026.10.02-6';
+var CACHE = 'bookclub-1do-2026.10.18-1';
 var SHELL = ['./', 'index.html', 'manifest.webmanifest', 'content/index.json', 'icons/icon-192.png'];
 
 self.addEventListener('install', function (e) {

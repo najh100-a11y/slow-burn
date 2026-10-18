@@ -4,7 +4,7 @@
 (function () {
   'use strict';
 
-  var APP_VERSION = '2026.10.02-6';
+  var APP_VERSION = '2026.10.18-1';
   var CFG = window.BOOKCLUB_CONFIG || {};
   var SHARING = !!(CFG.supabaseUrl && CFG.supabaseAnonKey);
   var KEY = 'bookclub-1do-v1';
@@ -16,7 +16,7 @@
   var SIZES = [['m', '보통'], ['l', '크게'], ['xl', '아주 크게']];
 
   /* ---------- 저장 ---------- */
-  var DEFAULTS = { deviceId: '', name: '', joined: false, code: '', size: 'm', leaderPin: '', checks: {}, notes: [], drafts: {} };
+  var DEFAULTS = { deviceId: '', name: '', joined: false, code: '', size: 'm', leaderPin: '', checks: {}, notes: [], drafts: {}, seen: {} };
   var S = load();
   function load() {
     try { return Object.assign({}, DEFAULTS, JSON.parse(localStorage.getItem(KEY) || '{}')); }
@@ -30,7 +30,7 @@
   if (!S.deviceId) { S.deviceId = uid(); save(); }
   document.documentElement.setAttribute('data-size', S.size);
 
-  var ui = { sel: null, q: {}, acc: {}, nfilter: 'all', bfilter: 'all', board: {}, big: null, joinErr: '', busy: false };
+  var ui = { sel: null, q: {}, acc: {}, nfilter: 'all', bfilter: 'all', board: {}, thread: {}, big: null, joinErr: '', busy: false };
   var INDEX = null;
   var SESS = {};
   var pollTimer = null;
@@ -64,6 +64,15 @@
   function canShare() { return SHARING && S.joined && !!S.code; }
   function pageLabel(p) { if (!p) return ''; return /^\d+$/.test(p) ? p + '쪽' : p; }
   function kindLabel(k) { return k === 'moved' ? '공감·놀람' : k === 'doubt' ? '의심' : '질문 메모'; }
+  function fmtTime(t) {
+    var d = new Date(t); if (isNaN(d)) return '';
+    return (d.getMonth() + 1) + '월 ' + d.getDate() + '일 ' + ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2);
+  }
+  /* 답글을 쓰는 중이면 20초마다 새로 그리지 않는다 (입력이 끊기지 않도록) */
+  function typingReply() {
+    var a = document.activeElement;
+    return !!(a && a.tagName === 'TEXTAREA' && /^r:/.test(a.getAttribute('data-draft') || ''));
+  }
   function notesOf(sid, kind) { return S.notes.filter(function (n) { return n.sid === sid && (!kind || n.kind === kind); }); }
 
   function svg(paths, size, sw) {
@@ -171,8 +180,14 @@
     var s = SESS[id];
     if (!canShare() || !s) return Promise.resolve();
     var p = boardOpen(s)
-      ? rpc('bookclub_list', { p_code: S.code, p_session: id, p_device: S.deviceId }).then(function (rows) {
-          ui.board[id] = { rows: rows || [], count: (rows || []).length, err: false };
+      ? Promise.all([
+          rpc('bookclub_list', { p_code: S.code, p_session: id, p_device: S.deviceId }),
+          /* 답글 기능(replies.sql)을 아직 설치하지 않았으면 답글 없이 나눔판만 보여 준다 */
+          rpc('bookclub_list_replies', { p_code: S.code, p_session: id, p_device: S.deviceId }).catch(function () { return null; })
+        ]).then(function (res) {
+          var rows = res[0] || [], reps = res[1], by = {};
+          (reps || []).forEach(function (x) { (by[x.note_id] = by[x.note_id] || []).push(x); });
+          ui.board[id] = { rows: rows, count: rows.length, err: false, replies: by, repliesOk: Array.isArray(reps) };
         })
       : rpc('bookclub_count', { p_code: S.code, p_session: id }).then(function (n) {
           ui.board[id] = { count: n || 0, err: false };
@@ -182,7 +197,7 @@
     }).then(function () {
       if (rerender === false) return;
       var r = parse();
-      if (r.name === 's' && r.id === id && r.tab === 'board') render();
+      if (r.name === 's' && r.id === id && r.tab === 'board') { if (!typingReply()) render(); }
       else if (r.name === 's' && r.id === id && r.tab === 'share') updateBadge(id);
     });
   }
@@ -190,6 +205,11 @@
     var el = document.querySelector('[data-badge="' + id + '"]');
     var b = ui.board[id];
     if (el && b && typeof b.count === 'number') el.textContent = b.count;
+    /* 내 문장 아래 답글 수 (입력 중인 글이 끊기지 않도록 화면을 다시 그리지 않고 글자만 바꾼다) */
+    Array.prototype.forEach.call(document.querySelectorAll('[data-rc]'), function (x) {
+      var n = b && b.replies && b.replies[x.getAttribute('data-rc')] ? b.replies[x.getAttribute('data-rc')].length : 0;
+      x.innerHTML = n ? '<a href="#/s/' + id + '/board">답글 ' + n + '개 보기</a>' : '';
+    });
   }
 
   /* ---------- 경로 ---------- */
@@ -490,7 +510,9 @@
     notesOf(s.id, kind).forEach(function (n) {
       var st = n.remoteId ? ('나눔판에 올림' + (n.anon || !S.name ? ', 익명' : ', ' + esc(S.name))) : '내 휴대폰에만';
       var acts = (!n.remoteId && canShare() ? '<button class="linkish" data-act="postnote" data-id="' + n.id + '">나눔판에 올리기</button>' : '') + '<button class="linkish danger" data-act="delnote" data-id="' + n.id + '">지우기</button>';
-      h += '<div class="saved' + (kind === 'doubt' ? ' doubt' : '') + '"><div class="q">' + esc(n.body) + '</div><div class="m"><span>' + esc(pageLabel(n.page)) + (n.page ? ', ' : '') + st + '</span><span class="row" style="gap:14px">' + acts + '</span></div></div>';
+      var bb = ui.board[s.id], rc = n.remoteId && bb && bb.replies && bb.replies[n.remoteId] ? bb.replies[n.remoteId].length : 0;
+      h += '<div class="saved' + (kind === 'doubt' ? ' doubt' : '') + '"><div class="q">' + esc(n.body) + '</div><div class="m"><span>' + esc(pageLabel(n.page)) + (n.page ? ', ' : '') + st + '</span><span class="row" style="gap:14px">' + acts + '</span></div>' +
+        (n.remoteId ? '<div class="small rc" data-rc="' + esc(n.remoteId) + '">' + (rc ? '<a href="#/s/' + s.id + '/board">답글 ' + rc + '개 보기</a>' : '') + '</div>' : '') + '</div>';
     });
     h += '<textarea id="ta-' + kind + '" rows="3" data-draft="' + k + '" placeholder="' + esc(ph) + '">' + esc(S.drafts[k] || '') + '</textarea>';
     if (canShare()) {
@@ -510,13 +532,14 @@
 
   function tBoard(s) {
     var h = subtabs(s, 'board');
+    seenChanged = false;
     if (!SHARING) return h + '<div class="empty">나눔판은 아직 준비 중이에요.</div>';
     if (!canShare()) return h + '<div class="empty">서로의 문장을 함께 보려면 모임 코드가 필요해요.</div><a class="btn ghost" href="#/join">모임 코드 넣기</a>';
     var b = ui.board[s.id];
     if (!b) return h + '<div class="empty">불러오는 중…</div>';
     if (b.err && !b.rows && typeof b.count !== 'number') return h + '<div class="empty">나눔판을 불러오지 못했어요. 인터넷 연결을 확인해 주세요.</div><button class="btn ghost" data-act="retryboard" data-sid="' + s.id + '">다시 불러오기</button>';
     if (!boardOpen(s)) {
-      if (!readOpen(s)) return h + lockedCard(fmt(boardOpenAt(s)) + '에 열려요', '요약이 열리는 날부터 서로의 문장을 함께 보고 나도요를 누를 수 있어요.');
+      if (!readOpen(s)) return h + lockedCard(fmt(boardOpenAt(s)) + '에 열려요', '요약이 열리는 날부터 서로의 문장을 함께 보고 나도요와 답글을 남길 수 있어요.');
       return h + '<div class="locked"><div class="t">지금까지 ' + (b.count || 0) + '개의 문장이 올라왔어요</div><div class="s">서로의 문장은 ' + esc(fmt(boardOpenAt(s))) + '부터 함께 봅니다. 그 전에 내 문장을 올려 두셔도 좋아요.</div><a class="btn small ghost" href="#/s/' + s.id + '/share" style="margin-top:6px">내 문장 적기</a></div>';
     }
     if (!boardReallyOpen(s)) h += previewBanner(boardOpenAt(s));
@@ -527,7 +550,7 @@
       '<button class="chip" data-act="bfilter" data-v="moved" aria-pressed="' + (f === 'moved') + '">공감·놀람 ' + nm + '</button>' +
       '<button class="chip" data-act="bfilter" data-v="doubt" aria-pressed="' + (f === 'doubt') + '">의심 ' + nd + '</button></div>' +
       '<button class="icon-btn" data-act="bigboard" data-sid="' + s.id + '" aria-label="나눔판 크게 보기">' + I.expand + '</button></div>';
-    h += '<div class="live"><span class="d"></span>나도요가 많은 순서예요. 마음에 닿는 문장에 나도요를 눌러 주세요.</div>';
+    h += '<div class="live"><span class="d"></span>' + (b.repliesOk ? '나도요가 많은 순서예요. 나도요를 누르거나 답글로 생각을 이어 보세요.' : '나도요가 많은 순서예요. 마음에 닿는 문장에 나도요를 눌러 주세요.') + '</div>';
     var shown = rows.filter(function (x) { return f === 'all' || x.kind === f; });
     if (!shown.length) h += '<div class="empty">아직 올라온 문장이 없어요. 첫 문장을 올려 보세요.</div>';
     shown.forEach(function (x) {
@@ -535,10 +558,43 @@
       var pg = pageLabel(x.page);
       h += '<div class="post"><div class="head"><span class="tag' + (x.kind === 'doubt' ? ' doubt' : '') + '">' + kindLabel(x.kind) + '</span><span class="small">' + who + (pg ? ', ' + esc(pg) : '') + '</span></div>' +
         '<div class="body' + (x.kind === 'moved' ? ' serif' : '') + '">' + esc(x.body) + '</div><div class="foot">' +
-        '<button class="like" data-act="like" data-sid="' + s.id + '" data-id="' + esc(x.id) + '" aria-pressed="' + !!x.liked + '">나도요 ' + (x.likes || 0) + '</button>' +
-        '<span class="row" style="gap:14px">' + (x.mine ? '<span class="small">내 글</span>' : '') + (isLeader() ? '<button class="linkish danger" data-act="hide" data-sid="' + s.id + '" data-id="' + esc(x.id) + '">숨기기</button>' : '') + '</span></div></div>';
+        '<span class="acts"><button class="like" data-act="like" data-sid="' + s.id + '" data-id="' + esc(x.id) + '" aria-pressed="' + !!x.liked + '">나도요 ' + (x.likes || 0) + '</button>' +
+        (b.repliesOk ? replyBtn(x, b) : '') + '</span>' +
+        '<span class="row" style="gap:14px">' + (x.mine ? '<span class="small">내 글</span>' : '') + (isLeader() ? '<button class="linkish danger" data-act="hide" data-sid="' + s.id + '" data-id="' + esc(x.id) + '">숨기기</button>' : '') + '</span></div>' +
+        (b.repliesOk && ui.thread[x.id] ? thread(s, x, b) : '') + '</div>';
     });
+    if (seenChanged) save();
     return h;
+  }
+  var seenChanged = false;
+  function repliesOf(b, id) { return (b.replies && b.replies[id]) || []; }
+  function replyBtn(x, b) {
+    var n = repliesOf(b, x.id).length, open = !!ui.thread[x.id];
+    var fresh = !open && n > (S.seen[x.id] || 0);
+    return '<button class="reply-btn" data-act="thread" data-id="' + esc(x.id) + '" aria-expanded="' + open + '">' + (fresh ? '<span class="new" aria-label="새 답글"></span>' : '') + '답글' + (n ? ' ' + n : ' 달기') + '</button>';
+  }
+  function thread(s, x, b) {
+    var reps = repliesOf(b, x.id), id = String(x.id);
+    if ((S.seen[id] || 0) !== reps.length) { S.seen[id] = reps.length; seenChanged = true; }
+    var h = '<div class="thread">';
+    reps.forEach(function (r) {
+      var who = r.display_name ? esc(r.display_name) : '익명';
+      h += '<div class="reply' + (r.mine ? ' mine' : '') + '"><div class="rh"><span class="who">' + who + '</span><span class="small">' + esc(fmtTime(r.created_at)) + '</span></div>' +
+        '<div class="rb">' + esc(r.body) + '</div><div class="ra">' +
+        '<button class="linkish" data-act="replyto" data-id="' + esc(id) + '" data-name="' + esc(r.display_name || '') + '">답하기</button>' +
+        (r.mine ? '<button class="linkish danger" data-act="delreply" data-sid="' + s.id + '" data-id="' + esc(r.id) + '">지우기</button>' : '') +
+        (isLeader() && !r.mine ? '<button class="linkish danger" data-act="hidereply" data-sid="' + s.id + '" data-id="' + esc(r.id) + '">숨기기</button>' : '') +
+        '</div></div>';
+    });
+    if (!reps.length) h += '<p class="none">아직 답글이 없어요. 이 문장에 대한 생각을 처음으로 남겨 보세요.</p>';
+    var k = 'r:' + id, anon = S.drafts['r:anon'] === '1' || !S.name;
+    h += '<div class="reply-form"><label class="sr" for="rt-' + esc(id) + '">답글</label><textarea id="rt-' + esc(id) + '" rows="2" maxlength="1000" data-draft="' + esc(k) + '" placeholder="생각을 이어 적어 보세요">' + esc(S.drafts[k] || '') + '</textarea>' +
+      '<div class="row between" style="flex-wrap:wrap;gap:8px">' +
+      (S.name
+        ? '<div class="toggle-2" role="group" aria-label="답글에 보일 이름"><button data-act="ranon" data-v="0" aria-pressed="' + !anon + '">' + esc(S.name) + '</button><button data-act="ranon" data-v="1" aria-pressed="' + anon + '">익명</button></div>'
+        : '<span class="small">익명으로 올라가요</span>') +
+      '<button class="btn small" data-act="sendreply" data-sid="' + s.id + '" data-id="' + esc(id) + '">올리기</button></div></div>';
+    return h + '</div>';
   }
 
   function tTalk(s) {
@@ -608,7 +664,7 @@
     var b = ui.board[s.id] || {}, rows = (b.rows || []).filter(function (x) { return ui.bfilter === 'all' || x.kind === ui.bfilter; });
     return '<div class="big" role="dialog" aria-modal="true" aria-label="나눔판 크게 보기"><div class="bar"><span class="k">' + esc(s.label) + ' 나눔판, ' + rows.length + '개의 문장</span><button class="close" data-act="bigclose">닫기</button></div>' +
       '<div class="wall">' + (rows.length ? rows.map(function (x) {
-        return '<div class="w"><div class="x">' + esc(x.body) + '</div><div class="y"><span>' + kindLabel(x.kind) + ', ' + (x.display_name ? esc(x.display_name) : '익명') + '</span><span>나도요 ' + (x.likes || 0) + '</span></div></div>';
+        return '<div class="w"><div class="x">' + esc(x.body) + '</div><div class="y"><span>' + kindLabel(x.kind) + ', ' + (x.display_name ? esc(x.display_name) : '익명') + '</span><span>나도요 ' + (x.likes || 0) + (b.repliesOk && repliesOf(b, x.id).length ? ', 답글 ' + repliesOf(b, x.id).length : '') + '</span></div></div>';
       }).join('') : '<div class="w"><div class="x">아직 올라온 문장이 없어요.</div></div>') + '</div></div>';
   }
 
@@ -723,6 +779,42 @@
       return rpc('bookclub_hide', { p_code: S.code, p_pin: S.leaderPin, p_note: id }).then(function (ok) {
         if (ok) { var b = ui.board[sid]; if (b && b.rows) b.rows = b.rows.filter(function (x) { return String(x.id) !== id; }); toast('숨겼어요'); render(); }
         else toast('인도자 PIN을 확인해 주세요.');
+      }).catch(function () { toast('숨기지 못했어요. 인터넷 연결을 확인해 주세요.'); });
+    },
+    thread: function (t) { var id = t.getAttribute('data-id'); ui.thread[id] = !ui.thread[id]; render(); },
+    ranon: function (t) { S.drafts['r:anon'] = t.getAttribute('data-v'); save(); render(); },
+    replyto: function (t) {
+      var id = t.getAttribute('data-id'), name = t.getAttribute('data-name'), k = 'r:' + id;
+      ui.thread[id] = true;
+      if (name && (S.drafts[k] || '').indexOf('@' + name) !== 0) S.drafts[k] = '@' + name + ' ' + (S.drafts[k] || '');
+      save(); render();
+      var ta = document.getElementById('rt-' + id);
+      if (ta) { ta.focus(); try { ta.setSelectionRange(ta.value.length, ta.value.length); } catch (e) {} }
+    },
+    sendreply: function (t) {
+      var sid = t.getAttribute('data-sid'), id = t.getAttribute('data-id'), k = 'r:' + id;
+      var body = (S.drafts[k] || '').trim();
+      if (!body) { toast('먼저 답글을 적어 주세요.'); var ta = document.getElementById('rt-' + id); if (ta) ta.focus(); return; }
+      var anon = S.drafts['r:anon'] === '1' || !S.name;
+      if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+      t.disabled = true;
+      return rpc('bookclub_reply', { p_code: S.code, p_note: id, p_body: body.slice(0, 1000), p_name: anon ? '' : S.name, p_device: S.deviceId })
+        .then(function () { S.drafts[k] = ''; save(); toast('답글을 올렸어요'); return refreshBoard(sid); })
+        .catch(function () { t.disabled = false; toast('답글을 올리지 못했어요. 인터넷 연결을 확인하고 다시 눌러 주세요.'); });
+    },
+    delreply: function (t) {
+      var sid = t.getAttribute('data-sid'), id = t.getAttribute('data-id');
+      if (!window.confirm('이 답글을 지울까요?')) return;
+      return rpc('bookclub_delete_reply', { p_code: S.code, p_reply: id, p_device: S.deviceId })
+        .then(function () { toast('지웠어요'); return refreshBoard(sid); })
+        .catch(function () { toast('지우지 못했어요. 인터넷 연결을 확인해 주세요.'); });
+    },
+    hidereply: function (t) {
+      var sid = t.getAttribute('data-sid'), id = t.getAttribute('data-id');
+      if (!window.confirm('이 답글을 숨길까요?')) return;
+      return rpc('bookclub_hide_reply', { p_code: S.code, p_pin: S.leaderPin, p_reply: id }).then(function (ok) {
+        if (ok) { toast('숨겼어요'); return refreshBoard(sid); }
+        toast('인도자 PIN을 확인해 주세요.');
       }).catch(function () { toast('숨기지 못했어요. 인터넷 연결을 확인해 주세요.'); });
     },
     qprev: function (t) { var sid = t.getAttribute('data-sid'); ui.q[sid] = Math.max(0, (ui.q[sid] || 0) - 1); render(); if (!ui.big) window.scrollTo(0, 0); },

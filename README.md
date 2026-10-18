@@ -48,13 +48,20 @@ Publishable key는 원래 공개되는 값이다. 나눔판의 보안은 SQL 함
 
 이 기능을 쓰려면 Supabase SQL Editor에서 `supabase/schedule.sql`을 한 번 실행해 둔다. 고칠 값 없이 그대로 실행하면 된다. 처음부터 새로 설정하는 경우에는 `setup.sql`에 이미 들어 있다.
 
+## 6. 답글로 토론하기
+
+나눔판(함께 보기)의 문장마다 "답글" 단추가 있다. 누르면 그 문장에 달린 답글이 먼저 쓴 순서대로 열리고, 아래 칸에 답글을 적어 올릴 수 있다. 답글마다 "답하기"를 누르면 그 사람의 이름이 앞에 붙은 채로 답글 칸이 열린다. 설정에서 이름을 정해 둔 사람은 답글을 이름으로 올릴지 익명으로 올릴지 고를 수 있고, 이름이 없으면 익명으로 올라간다. 아직 열어 보지 않은 새 답글이 있으면 답글 단추에 주황색 점이 붙는다. 내 답글은 내 휴대폰에서 지울 수 있고, 인도자는 다른 사람의 답글을 숨길 수 있다. 내 문장 화면에서도 내가 나눔판에 올린 문장 아래에 답글 수가 보인다. 답글을 쓰는 동안에는 20초마다 하는 새로 고침이 화면을 다시 그리지 않아 입력이 끊기지 않는다.
+
+이 기능을 쓰려면 Supabase SQL Editor에서 `supabase/replies.sql`을 한 번 실행해 둔다. 고칠 값 없이 그대로 실행하면 된다. 실행하기 전에는 앱이 답글 단추 없이 예전처럼 나눔판만 보여 준다. 처음부터 새로 설정하는 경우에는 `setup.sql`에 이미 들어 있다.
+
 ## 파일
 
 - `index.html`, `styles.css`, `app.js`: 앱 본체
 - `config.js`: 나눔판 설정
 - `content/index.json`: 모임 목록과 날짜
-- `content/s0.json`, `content/s1.json`: 오리엔테이션과 1회차 자료
+- `content/s0.json`~`content/s4.json`: 오리엔테이션과 회차별 자료
 - `content/_template.json`: 새 회차 자료 틀
 - `manifest.webmanifest`, `sw.js`, `icons/`: 홈 화면 설치와 오프라인용
 - `supabase/setup.sql`: 나눔판 표와 함수(처음 설정용)
 - `supabase/schedule.sql`: 열리는 날 조정 기능(이미 setup.sql을 실행한 경우 추가로 한 번 실행)
+- `supabase/replies.sql`: 나눔판 답글 기능(이미 setup.sql을 실행한 경우 추가로 한 번 실행)
