@@ -337,3 +337,4 @@ input.page { width: 5.5em; flex-shrink: 0; min-height: 44px; }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .saved .rc:empty { display: none; }
 .reply-form .btn { width: auto; min-width: 96px; margin-left: auto; }
+.prose p + p { margin-top: 10px; }

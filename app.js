@@ -4,7 +4,7 @@
 (function () {
   'use strict';
 
-  var APP_VERSION = '2026.10.18-1';
+  var APP_VERSION = '2026.10.29-1';
   var CFG = window.BOOKCLUB_CONFIG || {};
   var SHARING = !!(CFG.supabaseUrl && CFG.supabaseAnonKey);
   var KEY = 'bookclub-1do-v1';
@@ -632,7 +632,7 @@
         if (sec.source) h += '<div class="small">' + esc(sec.source) + '</div>';
         h += '</section>';
       } else {
-        h += '<section class="card tight"><div style="display:flex;flex-direction:column;gap:2px"><div class="label-strong">' + esc(sec.title) + '</div>' + (sec.lead ? '<div class="small">' + esc(sec.lead) + '</div>' : '') + '</div><div class="prose"><p>' + esc(sec.p) + '</p></div>' + (sec.q ? '<div class="ask">' + esc(sec.q) + '</div>' : '') + '</section>';
+        h += '<section class="card tight"><div style="display:flex;flex-direction:column;gap:2px"><div class="label-strong">' + esc(sec.title) + '</div>' + (sec.lead ? '<div class="small">' + esc(sec.lead) + '</div>' : '') + '</div><div class="prose">' + (sec.ps || [sec.p]).map(function (x) { return '<p>' + esc(x) + '</p>'; }).join('') + '</div>' + (sec.q ? '<div class="ask">' + esc(sec.q) + '</div>' : '') + '</section>';
       }
     });
     if (s.kingdom && s.kingdom.items) {
